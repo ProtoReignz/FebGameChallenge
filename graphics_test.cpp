@@ -1,0 +1,149 @@
+#include "raylib.h"
+#include "raymath.h"
+
+
+
+#define PLAYER_SPD 200.0f
+
+
+
+typedef struct Player {
+    Vector2 position;
+    float speed;
+} Player;
+
+typedef struct EnvItem {
+    Rectangle rect;
+    int blocking;
+    Color color;
+} EnvItem;
+
+void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta);
+void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
+void UpdateCameraCenterInsideMap(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
+void UpdateCameraCenterSmoothFollow(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
+void UpdateCameraEvenOutOnLanding(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
+void UpdateCameraPlayerBoundsPush(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
+
+
+
+
+int main(void){
+    const int screenWidth = 800;
+    const int screenHeight = 450;
+
+    InitWindow(screenWidth, screenHeight, "Mine n' Mayhem");
+
+    Player player = {0};
+    player.position = (Vector2){400, 280};
+    player.speed = 0;
+    
+    EnvItem envItems[] = {
+        {{ 0, 0, 1000, 400 }, 0, LIGHTGRAY },
+        {{ 0, 400, 1000, 200 }, 1, GRAY },
+        {{ 300, 200, 400, 10 }, 1, GRAY },
+        {{ 250, 300, 100, 10 }, 1, GRAY },
+        {{ 650, 300, 100, 10 }, 1, GRAY }
+    };
+
+    int envItemsLength = sizeof(envItems)/sizeof(envItems[0]);
+
+    Camera2D camera = { 0 };
+    // camera.offset.x = CENTERX;   
+    // camera.offset.y = CENTERY;   
+    camera.target = player.position;
+    camera.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f};         
+    // camera.target.y = 0;         
+    camera.rotation = 0.0f;        
+    camera.zoom     = 1.0f;
+
+    void (*cameraUpdaters[])(Camera2D*, Player*, EnvItem*, int, float, int, int) = {
+        UpdateCameraCenter,
+        UpdateCameraCenterInsideMap,
+        UpdateCameraCenterSmoothFollow,
+        UpdateCameraEvenOutOnLanding,
+        UpdateCameraPlayerBoundsPush
+    };
+
+    SetTargetFPS(60);
+
+    while(!WindowShouldClose()){
+        float deltaTime = GetFrameTime();
+
+        UpdatePlayer(&player, envItems, envItemsLength, deltaTime);
+
+        BeginDrawing();
+            ClearBackground(BLACK);
+
+            BeginMode2D(camera);
+
+                for (int i = 0; i < envItemsLength; i++) DrawRectangleRec(envItems[i].rect, envItems[i].color);
+
+                Rectangle playerRect = { player.position.x - 20, player.position.y - 40, 40.0f, 40.0f };
+                DrawRectangleRec(playerRect, RED);
+
+                DrawCircleV(player.position, 5.0f, GOLD);
+
+            EndMode2D();
+
+            DrawText("Send Help", 0, 20, 15, BLACK);
+
+        EndDrawing();
+    }
+
+
+    CloseWindow();
+    return 0;
+}
+
+void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta){
+    if (IsKeyDown(KEY_LEFT)) player->position.x -= PLAYER_SPD*delta;
+    if (IsKeyDown(KEY_RIGHT)) player->position.x += PLAYER_SPD*delta;
+    if (IsKeyDown(KEY_DOWN)) player->position.y += PLAYER_SPD*delta;
+    if (IsKeyDown(KEY_UP)) player->position.y -= PLAYER_SPD*delta;
+
+    bool hitObstacle = false;
+    for (int i = 0; i < envItemsLength; i++)
+    {
+        EnvItem *ei = envItems + i;
+        Vector2 *p = &(player->position);
+        if (ei->blocking &&
+            ei->rect.x <= p->x &&
+            ei->rect.x + ei->rect.width >= p->x &&
+            ei->rect.y >= p->y &&
+            ei->rect.y <= p->y + player->speed*delta)
+        {
+            hitObstacle = true;
+            player->speed = 0.0f;
+            p->y = ei->rect.y;
+            break;
+        }
+    }
+
+    // if (!hitObstacle)
+    // {
+    //     player->position.y += player->speed*delta;
+    // }
+}
+
+void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
+    // Simple center following
+    camera->target = player->position;
+}
+
+void UpdateCameraCenterInsideMap(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
+    camera->target = player->position;
+}
+
+void UpdateCameraCenterSmoothFollow(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
+    camera->target = player->position;
+}
+
+void UpdateCameraEvenOutOnLanding(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
+    camera->target = player->position;
+}
+
+void UpdateCameraPlayerBoundsPush(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
+    camera->target = player->position;
+}
+    
