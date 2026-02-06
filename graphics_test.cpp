@@ -5,8 +5,6 @@
 
 #define PLAYER_SPD 200.0f
 
-
-
 typedef struct Player {
     Vector2 position;
     float speed;
@@ -20,12 +18,6 @@ typedef struct EnvItem {
 
 void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta);
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-void UpdateCameraCenterInsideMap(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-void UpdateCameraCenterSmoothFollow(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-void UpdateCameraEvenOutOnLanding(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-void UpdateCameraPlayerBoundsPush(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-
-
 
 
 int main(void){
@@ -51,19 +43,14 @@ int main(void){
     Camera2D camera = { 0 };
     // camera.offset.x = CENTERX;   
     // camera.offset.y = CENTERY;   
+
+    // Remake these with fixed variables
     camera.target = player.position;
-    camera.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f};         
+    camera.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f};
+    
     // camera.target.y = 0;         
     camera.rotation = 0.0f;        
     camera.zoom     = 1.0f;
-
-    void (*cameraUpdaters[])(Camera2D*, Player*, EnvItem*, int, float, int, int) = {
-        UpdateCameraCenter,
-        UpdateCameraCenterInsideMap,
-        UpdateCameraCenterSmoothFollow,
-        UpdateCameraEvenOutOnLanding,
-        UpdateCameraPlayerBoundsPush
-    };
 
     SetTargetFPS(60);
 
@@ -71,7 +58,8 @@ int main(void){
         float deltaTime = GetFrameTime();
 
         UpdatePlayer(&player, envItems, envItemsLength, deltaTime);
-
+        UpdateCameraCenter(&camera, &player, envItems, envItemsLength, deltaTime, screenWidth, screenHeight);
+        
         BeginDrawing();
             ClearBackground(BLACK);
 
@@ -120,10 +108,6 @@ void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float d
         }
     }
 
-    // if (!hitObstacle)
-    // {
-    //     player->position.y += player->speed*delta;
-    // }
 }
 
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
@@ -131,19 +115,3 @@ void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int
     camera->target = player->position;
 }
 
-void UpdateCameraCenterInsideMap(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
-    camera->target = player->position;
-}
-
-void UpdateCameraCenterSmoothFollow(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
-    camera->target = player->position;
-}
-
-void UpdateCameraEvenOutOnLanding(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
-    camera->target = player->position;
-}
-
-void UpdateCameraPlayerBoundsPush(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
-    camera->target = player->position;
-}
-    
