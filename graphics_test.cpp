@@ -15,6 +15,8 @@
 typedef struct Player {
     Vector2 position;
     float speed;
+    float width;
+    float height;
 } Player;
 
 typedef struct EnvItem {
@@ -47,7 +49,12 @@ int main(void){
 
     InitWindow(screenWidth, screenHeight, "Mine n' Mayhem");
 
-    Player player = {0};
+    Player player = {
+        .position = {100.0f, 100.0f},
+        .width = 32.0f,
+        .height = 32.0f,
+    };
+    
     player.position = (Vector2){400, 280};
     player.speed = 0;
     
@@ -123,6 +130,11 @@ int main(void){
 }
 
 void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta){
+    
+    Vector2 prevPosition = player-> position;
+
+    Vector2 movement = {0.0f, 0.0f};
+    
     if (IsKeyDown(KEY_LEFT)) player->position.x -= PLAYER_SPD*delta;
     if (IsKeyDown(KEY_RIGHT)) player->position.x += PLAYER_SPD*delta;
     if (IsKeyDown(KEY_DOWN)) player->position.y += PLAYER_SPD*delta;
@@ -133,24 +145,32 @@ void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float d
     if (IsKeyDown(KEY_S)) player->position.y += PLAYER_SPD*delta;
     if (IsKeyDown(KEY_W)) player->position.y -= PLAYER_SPD*delta;
 
+    if (movement.x != 0.0f && movement.y != 0.0f){
+        float length = sqrtf(movement.x*movement.x+movement.y*movement.y);
+        movement.x /= length;
+        movement.y /= length;
+    }
 
+    player -> position.x += movement.x * PLAYER_SPD *delta;
+    player -> position.y += movement.y * PLAYER_SPD *delta;
 
-    bool hitObstacle = false;
+    Rectangle playerRect = {
+        player->position.x,
+        player->position.y,
+        player->width,
+        player->height
+    };
+
     for (int i = 0; i < envItemsLength; i++)
     {
-        EnvItem *ei = envItems + i;
-        Vector2 *p = &(player->position);
-        if (ei->blocking &&
-            ei->rect.x <= p->x &&
-            ei->rect.x + ei->rect.width >= p->x &&
-            ei->rect.y >= p->y &&
-            ei->rect.y <= p->y + player->speed*delta)
-        {
-            hitObstacle = true;
-            player->speed = 0.0f;
-            p->y = ei->rect.y;
+        EnvItem *ei = &envItems[i];
+
+        if (!ei -> blocking) continue;
+
+       if (CheckCollisionRecs(playerRect, ei->rect)){
+            player->position = prevPosition;
             break;
-        }
+       }
     }
 
 }
