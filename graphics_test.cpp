@@ -35,7 +35,7 @@ typedef struct Projectile{
 //Player and Camera
 void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta);
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
-
+Rectangle GetPlayerBox(Player *player);
 //Weapons
 void Attack(Player *player, Vector2 mousePosition, Projectile *projectiles, int maxProjectiles); //add mouse direction, weapon type etc.
 void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta);
@@ -106,7 +106,13 @@ int main(void){
 
                 for (int i = 0; i < envItemsLength; i++) DrawRectangleRec(envItems[i].rect, envItems[i].color);
 
-                Rectangle playerRect = { player.position.x - 20, player.position.y - 40, 40.0f, 40.0f };
+                Rectangle playerRect = { 
+                    player.position.x - player.width/2.0f, 
+                    player.position.y - player.height/2.0f, 
+                    player.width, 
+                    player.height 
+                };
+
                 DrawRectangleRec(playerRect, RED);
 
                 DrawCircleV(player.position, 5.0f, GOLD);
@@ -115,7 +121,7 @@ int main(void){
 
             EndMode2D();
 
-            DrawText("Send Help", 0, 20, 15, BLACK);
+            DrawText("Alpha 1.0", 0, 20, 15, BLACK);
 
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
                 Attack(&player, mousePos, projectiles, MAX_PROJECTILES);
@@ -130,49 +136,55 @@ int main(void){
 }
 
 void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta){
-    
+
     Vector2 prevPosition = player-> position;
 
     Vector2 movement = {0.0f, 0.0f};
     
-    if (IsKeyDown(KEY_LEFT)) player->position.x -= PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_RIGHT)) player->position.x += PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_DOWN)) player->position.y += PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_UP)) player->position.y -= PLAYER_SPD*delta;
+    if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) movement.x -= 1.0f;
+    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) movement.x += 1.0f;
+    if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) movement.y -= 1.0f;
+    if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) movement.y += 1.0f;
 
-    if (IsKeyDown(KEY_A)) player->position.x -= PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_D)) player->position.x += PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_S)) player->position.y += PLAYER_SPD*delta;
-    if (IsKeyDown(KEY_W)) player->position.y -= PLAYER_SPD*delta;
-
-    if (movement.x != 0.0f && movement.y != 0.0f){
-        float length = sqrtf(movement.x*movement.x+movement.y*movement.y);
-        movement.x /= length;
-        movement.y /= length;
+    if(movement.x != 0.0f && movement.y != 0.0f){
+        movement = Vector2Normalize(movement);
     }
 
-    player -> position.x += movement.x * PLAYER_SPD *delta;
-    player -> position.y += movement.y * PLAYER_SPD *delta;
 
-    Rectangle playerRect = {
-        player->position.x,
-        player->position.y,
+    // X-Axis Collision detection
+    player->position.x += movement.x * PLAYER_SPD * delta;
+    Rectangle playerRect = GetPlayerBox(player);
+
+    for (int i = 0; i < envItemsLength; i++){
+        if (!envItems[i].blocking) continue;
+        if (CheckCollisionRecs(playerRect, envItems[i].rect)){
+            player->position.x -= movement.x * PLAYER_SPD * delta;
+            break;
+        }
+    }
+
+    // Y-Axis Collision Detection
+
+    player->position.y += movement.y * PLAYER_SPD * delta;
+    playerRect = GetPlayerBox(player);
+
+    for (int i = 0; i < envItemsLength; i++){
+        if (!envItems[i].blocking) continue;
+        if (CheckCollisionRecs(playerRect, envItems[i].rect)){
+            player->position.y -= movement.y * PLAYER_SPD * delta;
+            break;
+        }
+    }
+}
+
+Rectangle GetPlayerBox(Player *player){
+    return(Rectangle){
+        //collisionHitbox
+        player->position.x - player->width/2.0f,
+        player->position.y - player->height/2.0f,
         player->width,
         player->height
     };
-
-    for (int i = 0; i < envItemsLength; i++)
-    {
-        EnvItem *ei = &envItems[i];
-
-        if (!ei -> blocking) continue;
-
-       if (CheckCollisionRecs(playerRect, ei->rect)){
-            player->position = prevPosition;
-            break;
-       }
-    }
-
 }
 
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
