@@ -57,7 +57,7 @@ struct MsgClientInput{
     float mouse_mapX {};
     float mouse_mapY {};
     uint8_t shooting {}; //1 if attack is pressed
-} MsgClientInput;
+};
 
 struct MsgPlayerEvent{
 
