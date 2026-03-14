@@ -109,7 +109,7 @@ static void SendInput(ENetPeer* server, const ClientState& state, const Camera2D
         .right      = static_cast<uint8_t>(IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)),
         .up         = static_cast<uint8_t>(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)),
         .down       = static_cast<uint8_t>(IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)),
-        .mouse_left = static_cast<uintmapX = mouseWorld.x,
+        .mouse_left = mouseWorld.x,
         .mouse_mapY = mouseWorld.y,
         .shooting   = static_cast<uint8_t>(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)),
     }; //static cast as the narrowing is explicit for the compiler, thanks claude ;D
