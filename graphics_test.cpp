@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#include <enet/enet.h>
 
 
 #define PLAYER_SPD 200.0f
@@ -30,20 +31,27 @@ typedef struct Projectile{
     Vector2 velocity;
     float radius;
     bool active;
-}Projectile;
+} Projectile;
 
 //Player and Camera
 void UpdatePlayer(Player *player, EnvItem *envItems, int envItemsLength, float delta);
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height);
 Rectangle GetPlayerBox(Player *player);
+
 //Weapons
 void Attack(Player *player, Vector2 mousePosition, Projectile *projectiles, int maxProjectiles); //add mouse direction, weapon type etc.
-void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta);
+void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta,  EnvItem *envItems, int envItemsLength);
 void DrawProjectiles(Projectile *projectiles, int maxProjectiles);
 
 
-
 int main(void){
+
+    //multiplayer initialization
+
+    atexit(enet_deinitialize);
+
+
+
     const int screenWidth = 800;
     const int screenHeight = 450;
 
@@ -96,7 +104,7 @@ int main(void){
 
 
         UpdatePlayer(&player, envItems, envItemsLength, deltaTime);
-        UpdateProjectiles(projectiles, MAX_PROJECTILES, deltaTime);
+        UpdateProjectiles(projectiles, MAX_PROJECTILES, deltaTime, envItems, envItemsLength);
         UpdateCameraCenter(&camera, &player, envItems, envItemsLength, deltaTime, screenWidth, screenHeight);
         
         BeginDrawing();
@@ -121,7 +129,7 @@ int main(void){
 
             EndMode2D();
 
-            DrawText("Alpha 1.0", 0, 20, 15, BLACK);
+            DrawText("Alpha 1.0.1.1", 0, 20, 15, BLACK);
 
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
                 Attack(&player, mousePos, projectiles, MAX_PROJECTILES);
@@ -187,6 +195,17 @@ Rectangle GetPlayerBox(Player *player){
     };
 }
 
+Rectangle GetProjBox(Projectile *projectile){
+    return(Rectangle){
+        //collisionHitbox
+        projectile->position.x - projectile->radius,
+        projectile->position.y - projectile->radius,
+        projectile->radius,
+        projectile->radius
+    };
+}
+
+
 void UpdateCameraCenter(Camera2D *camera, Player *player, EnvItem *envItems, int envItemsLength, float delta, int width, int height) {
     // Simple center following
     camera->target = player->position;
@@ -211,7 +230,7 @@ void Attack(Player *player, Vector2 mousePosition, Projectile *projectiles, int 
     }
 }
 
-void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta){
+void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta,  EnvItem *envItems, int envItemsLength){
     for (int i = 0; i < maxProjectiles; i++){
         if (projectiles[i].active){
             projectiles[i].position.x += projectiles[i].velocity.x * delta;
@@ -219,6 +238,17 @@ void UpdateProjectiles(Projectile *projectiles, int maxProjectiles, float delta)
 
             if (projectiles[i].position.x < -100 || projectiles[i].position.x > 1100 || projectiles[i].position.y < -100 || projectiles[i].position.y > 700) {
                     projectiles[i].active = false;
+            }
+
+            // Projectile Collision
+            Rectangle projRect = GetProjBox(&projectiles[i]);
+            for (int j = 0; j < envItemsLength; j++){
+                if (!envItems[j].blocking) continue;
+                else if(CheckCollisionRecs(projRect, envItems[j].rect)){
+                    projectiles[i].active = false;
+                }
+
+                //check for player collision here
             }
         }
     }
