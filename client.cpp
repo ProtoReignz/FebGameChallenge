@@ -2,6 +2,9 @@
 
 #define ENV_ITEMS_IMPL
 #include "game.h"
+
+static_assert(sizeof(MsgGameState) < 16000, "Packet too big");
+
 #include "raymath.h"
 
 #include <cstdio>
@@ -61,6 +64,7 @@ static bool PollNetwork(ENetHost* host, ClientState& state){
         switch(event.type){
             case ENET_EVENT_TYPE_RECEIVE: {
                 //stop if its a bad packet
+                
                 if (event.packet -> dataLength <1) {
                     enet_packet_destroy(event.packet);
                     break;
@@ -68,7 +72,8 @@ static bool PollNetwork(ENetHost* host, ClientState& state){
 
                 const uint8_t msgType = event.packet -> data[0];
 
-                if (msgType == MSG_GAME_STATE && event.packet->dataLength == sizeof(MsgGameState)){
+                std::printf("Packet received, size=%zu, type=%d\n", event.packet->dataLength, event.packet->data[0]);
+                if (msgType == static_cast<uint8_t>(MessageType::GAME_STATE) && event.packet->dataLength == sizeof(MsgGameState)){
                     const auto* msg = reinterpret_cast<const MsgGameState*>(event.packet->data);
                     
                     state.myID = msg->your_id;
@@ -104,12 +109,12 @@ static void SendInput(ENetPeer* server, const ClientState& state, const Camera2D
     const Vector2 mouseWorld = GetScreenToWorld2D(mouse, camera);
 
     MsgClientInput input{
-        .type = MSG_CLIENT_INPUT,
+        .type = static_cast<uint8_t>(MessageType::CLIENT_INPUT),
         .left       = static_cast<uint8_t>(IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)),
         .right      = static_cast<uint8_t>(IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)),
         .up         = static_cast<uint8_t>(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)),
         .down       = static_cast<uint8_t>(IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)),
-        .mouse_left = mouseWorld.x,
+        .mouse_mapX = mouseWorld.x,
         .mouse_mapY = mouseWorld.y,
         .shooting   = static_cast<uint8_t>(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)),
     }; //static cast as the narrowing is explicit for the compiler, thanks claude ;D
@@ -202,6 +207,11 @@ static void Disconnect(ENetHost* host, ENetPeer* server){
 int main(int argc, char **argv){
     const char* serverIP = (argc > 1) ? argv[1] : "127.0.0.1";
 
+    std::printf("sizeof(MsgGameState)    = %zu\n", sizeof(MsgGameState));
+    std::printf("sizeof(MsgClientInput)  = %zu\n", sizeof(MsgClientInput));
+    std::printf("sizeof(NetPlayer)       = %zu\n", sizeof(NetPlayer));
+    std::printf("sizeof(NetProjectile)   = %zu\n", sizeof(NetProjectile));
+        
     ENetGuard enetGuard;
     WindowGuard windowGuard (800, 450, "Mine n' Mayhem");
 

@@ -2,6 +2,9 @@
 
 #define ENV_ITEMS_IMPL
 #include "game.h"
+
+static_assert(sizeof(MsgGameState)<20000,"Packet too large");
+
 #include "raymath.h"
 
 #include <cstdio>
@@ -88,17 +91,19 @@ static void ServerUpdatePlayer(ServerPlayer& sp, float delta){
     }
 }
 
-static void ServerSpawnProjectile(NetProjectile* projs, float ox, float oy, float mx, float my) {
+static void ServerSpawnProjectile(NetProjectile* projs, uint8_t owner, float ox, float oy, float mx, float my) {
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (!projs[i].active) {
             projs[i].active = 1;
-            projs[i].x      = ox;
-            projs[i].y      = oy;
+            projs[i].owner = owner;
+            projs[i].x = ox;
+            projs[i].y = oy;
             projs[i].radius = PROJECTILES_RADIUS;
  
             const Vector2 dir = Vector2Normalize(
                 Vector2Subtract({ mx, my }, { ox, oy })
             );
+            
             projs[i].vx = dir.x * PROJECTILES_SPD;
             projs[i].vy = dir.y * PROJECTILES_SPD;
             break;
@@ -139,6 +144,8 @@ static void ServerUpdateProjectiles(NetProjectile* projs, ServerPlayer* players,
         //Collision with person ADD DAMAGE AND fix so that a projectile CAN't Hit its owner
         for (int j = 0; j < MAX_PLAYERS; j++){
             if (!players[j].net.active) continue;
+            if (j==projs[i].owner) continue;
+
             Rectangle playerBox = PlayerBox(&players[j].net);
             if (CheckCollisionRecs(pbox, playerBox)){
                 projs[i].active = 0;
@@ -159,10 +166,14 @@ static void BroadcastGameState(ENetHost* server, ServerPlayer* players, NetProje
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (!players[i].net.active) continue;
+        if (players[i].peer == nullptr) continue;
 
         msg.your_id = static_cast<uint8_t>(i);
 
-        ENetPacket *packet = enet_packet_create(&msg, sizeof(msg),                                                 ENET_PACKET_FLAG_UNSEQUENCED);
+        ENetPacket* packet = enet_packet_create(&msg, sizeof(msg), 0);
+        
+       // std::printf("Broadcasting to player %d, packet size=%zu\n", i, sizeof(msg));
+        
         enet_peer_send(players[i].peer, 1, packet);
     }
 }
@@ -304,7 +315,7 @@ int main(void) {
             for (int i = 0; i < MAX_PLAYERS; i++) {
                 if(!players[i].net.active) continue;
                 if (players[i].shooting) {
-                    ServerSpawnProjectile(projectiles, players[i].net.x, players[i].net.y, players[i].mouse_x, players[i].mouse_y);
+                    ServerSpawnProjectile(projectiles, players[i].net.id, players[i].net.x, players[i].net.y, players[i].mouse_x, players[i].mouse_y);
                     players[i].shooting = 0; // consume the shoot event
                 }
                 ServerUpdatePlayer(players[i], dt);
@@ -315,7 +326,7 @@ int main(void) {
 
         // Tiny sleep to avoid burning 100% CPU in the polling loop.
         // enet_host_service with timeout=1 would also work.
-        enet_host_service(server, &event, 1);
+       // enet_host_service(server, &event, 1);
     }
 
     enet_host_destroy(server);

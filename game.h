@@ -2,9 +2,11 @@
 
 #include "raylib.h"
 #include <enet/enet.h>
-#include <stdint.h>
+#include <cstdint>
 
 //Constants
+
+
 
 constexpr int MAX_PLAYERS = 4;
 
@@ -26,6 +28,8 @@ enum class MessageType : uint8_t{ // WHAT TYPE OF PACKET IS BEING SENT?
 //Game state structure
 //sent every frame
 
+#pragma pack(push, 1)
+
 struct NetPlayer{
     uint8_t id {}; //who are you
     uint8_t active {}; //are you the one that's doing something
@@ -37,6 +41,7 @@ struct NetPlayer{
 
 struct NetProjectile {
     uint8_t active {}; 
+    uint8_t owner {};
     float x {};
     float y {}; // position
     float vx {};
@@ -64,6 +69,9 @@ struct MsgPlayerEvent{
     uint8_t type {};
     uint8_t id {};
 };
+
+
+#pragma pack(pop)
 
 struct MsgGameState {
 
