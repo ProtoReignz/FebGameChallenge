@@ -18,6 +18,8 @@ constexpr int MAX_PROJECTILES = 100;
 constexpr float PROJECTILES_SPD = 400.0f;
 constexpr float PROJECTILES_RADIUS = 5.0f;
 
+constexpr int MAX_MELEES = 6;
+
 enum class MessageType : uint8_t{ // WHAT TYPE OF PACKET IS BEING SENT?
     CLIENT_INPUT = 0, // CLIENT->SERVER
     GAME_STATE = 1,  // SERVER->CLIENT GAME STATE
@@ -34,7 +36,7 @@ struct NetPlayer{
     uint8_t id {}; //who are you
     uint8_t active {}; //are you the one that's doing something
     float x {};
-    float y {}; // world position
+    float y {}; // world positioNetProjecn
     float width {};
     float height {};
 };
@@ -49,6 +51,20 @@ struct NetProjectile {
     float radius {};
 };
 
+struct NetMelee {
+    uint8_t active {};
+    uint8_t owner {};
+
+    float originX {};
+    float originY {};
+
+    float dirAng {};
+    float halfArc {};
+    float range {};
+    float currAng {};
+
+    uint8_t hitPlayers {};
+};
 
 //Packet structure
 
@@ -62,6 +78,7 @@ struct MsgClientInput{
     float mouse_mapX {};
     float mouse_mapY {};
     uint8_t shooting {}; //1 if attack is pressed
+    uint8_t charClass {};
 };
 
 struct MsgPlayerEvent{
@@ -79,6 +96,7 @@ struct MsgGameState {
     uint8_t your_id {}; // which player slot
     NetPlayer players[MAX_PLAYERS] {};
     NetProjectile projectiles[MAX_PROJECTILES] {};
+    NetMelee melees[MAX_MELEES] {};
 };
 
 

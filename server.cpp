@@ -25,6 +25,30 @@ struct ServerPlayer {
     float mouse_x {};
     float mouse_y {};
     uint8_t shooting;
+
+    int hp {};
+    int maxHP {};
+    uint8_t charClass {};
+    uint8_t weapon {};
+    int attackCooldown {};
+};
+
+struct ServerMelee {
+    uint8_t active {};
+    uint8_t owner {};
+
+    float originX {};
+    float originY {};
+
+    float dirAng {};
+    float halfArc {};
+    float range {};
+    float currAng {};
+
+    float sweepSpeed {};
+    int ticksLeft{};
+
+    int hitPlayers {};
 };
 
 
@@ -78,7 +102,6 @@ static void ServerUpdatePlayer(ServerPlayer& sp, float delta){
     }
 
     // Y-Axis Collision Detection
-
     sp.net.y += movement.y * PLAYER_SPD * delta;
     box = PlayerBox(&sp.net);
 
@@ -111,6 +134,87 @@ static void ServerSpawnProjectile(NetProjectile* projs, uint8_t owner, float ox,
     }
 }
 
+static void ServerSpawnMelee(ServerMelee* melees, float owner, float ox, float oy, float mx, float my){
+    for (int i=0; i<MAX_MELEES; i++){
+        if (melees[i].active && melees[i].owner == owner) return;
+    }
+
+    for (int i = 0; i <MAX_MELEES; i++){
+        if (melees[i].active) continue;
+
+        // mouse position
+
+        const float dir = atan2f(my-oy, mx-ox);
+
+        melees[i].active = 1;
+        melees[i].owner = owner;
+        melees[i].originX = ox;
+        melees[i].originY = oy;
+        melees[i].dirAng = dir;
+        //temp for basic melee 
+        melees[i].halfArc = 0.6f; 
+        melees[i].range = 80.0f;
+        melees[i].sweepSpeed = 4.0f;
+        //
+        melees[i].currAng = dir - melees[i].halfArc;
+        melees[i].ticksLeft = 30;
+        melees[i].hitPlayers = 0;
+        break;
+
+    }
+}
+
+static void ServerHandleAttack(ServerMelee* melees, NetProjectile* projs, ServerPlayer& sp, float delta){
+    if (sp.attackCooldown > 0 ) return;
+
+    if(sp.charClass==0){
+        ServerSpawnProjectile(projs,sp.net.id,sp.net.x,sp.net.y,sp.mouse_x,sp.mouse_y);
+        sp.attackCooldown = 20;
+    }else if (sp.charClass ==1){
+        ServerSpawnMelee(melees, sp.net.id,sp.net.x,sp.net.y,sp.mouse_x,sp.mouse_y);
+        sp.attackCooldown = 40;
+    }
+}
+
+
+static void ServerUpdateMelee(ServerMelee* melees, ServerPlayer* players, float delta){
+    for (int i = 0; i<MAX_MELEES; i++){
+        if (!melees[i].active) continue;
+
+        melees[i].currAng += melees[i].sweepSpeed * delta;
+        melees[i].ticksLeft--;
+
+        if (melees[i].ticksLeft <= 0 || melees[i].currAng >= melees[i].dirAng+melees[i].halfArc){
+            melees[i].active = 0;
+            continue;
+        }
+
+        constexpr float HALF_WIDTH = 0.15f;
+
+        for (int j = 0; j < MAX_PLAYERS; j++){
+            if(!players[j].net.active) continue;
+            if(j == melees[i].owner) continue;
+            if (melees[i].hitPlayers & (1 << j)) continue;
+
+            const float dx = players[j].net.x - melees[i].originX;
+            const float dy = players[j].net.y - melees[i].originY;
+
+            if ((dx*dx + dy*dy) > melees[i].range * melees[i].range) continue;
+
+            float angleDiff = atan2f(dy, dx) - melees[i].currAng;
+            while (angleDiff > PI) angleDiff -= 2.0f*PI;
+            while (angleDiff < -PI) angleDiff += 2.0f*PI;
+
+            if (fabsf(angleDiff) > HALF_WIDTH) continue;
+
+            melees[i].hitPlayers |= (1<< j);
+            players[j].hp -= 10;
+            std::printf("Player %d hitplayer %d Melee\n", melees[i].owner, j);
+
+        }
+
+    }
+}
 
 static void ServerUpdateProjectiles(NetProjectile* projs, ServerPlayer* players, float delta){
     for (int i = 0; i < MAX_PROJECTILES; i++){
@@ -155,7 +259,7 @@ static void ServerUpdateProjectiles(NetProjectile* projs, ServerPlayer* players,
     }
 }
 
-static void BroadcastGameState(ENetHost* server, ServerPlayer* players, NetProjectile* projs) {
+static void BroadcastGameState(ENetHost* server, ServerPlayer* players, NetProjectile* projs, ServerMelee* melees) {
     MsgGameState msg {};
     msg.type    = static_cast<uint8_t>(MessageType::GAME_STATE);
 
@@ -163,7 +267,16 @@ static void BroadcastGameState(ENetHost* server, ServerPlayer* players, NetProje
         msg.players[i] = players[i].net;
     for (int i = 0; i < MAX_PROJECTILES; i++)
         msg.projectiles[i] = projs[i];
-
+    for (int i = 0; i<MAX_MELEES; i++){
+        msg.melees[i].active = melees[i].active;
+        msg.melees[i].owner   = melees[i].owner;
+        msg.melees[i].originX = melees[i].originX;
+        msg.melees[i].originY = melees[i].originY;
+        msg.melees[i].dirAng  = melees[i].dirAng;
+        msg.melees[i].halfArc = melees[i].halfArc;
+        msg.melees[i].range   = melees[i].range;
+        msg.melees[i].currAng = melees[i].currAng;
+    }
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (!players[i].net.active) continue;
         if (players[i].peer == nullptr) continue;
@@ -231,6 +344,7 @@ static void HandleReceive(ENetEvent& event, ServerPlayer* players){
         players[slot].mouse_x = input->mouse_mapX;
         players[slot].mouse_y = input ->mouse_mapY;
         players[slot].shooting = input ->shooting;
+        players[slot].charClass = input ->charClass;
     
     }
 
@@ -274,6 +388,8 @@ int main(void) {
 
     ServerPlayer players[MAX_PLAYERS] {};
     NetProjectile projectiles[MAX_PROJECTILES] {};
+    ServerMelee melees[MAX_MELEES] {};
+
 
     // Fixed timestep: server ticks at 60hz regardless of enet_host_service timing
     constexpr float TICK_RATE = 1.0f / 60.0f;
@@ -314,14 +430,17 @@ int main(void) {
 
             for (int i = 0; i < MAX_PLAYERS; i++) {
                 if(!players[i].net.active) continue;
+                if (players[i].attackCooldown > 0) players[i].attackCooldown--;
                 if (players[i].shooting) {
-                    ServerSpawnProjectile(projectiles, players[i].net.id, players[i].net.x, players[i].net.y, players[i].mouse_x, players[i].mouse_y);
+
+                    ServerHandleAttack(melees, projectiles, players[i], dt);
                     players[i].shooting = 0; // consume the shoot event
                 }
                 ServerUpdatePlayer(players[i], dt);
             }
             ServerUpdateProjectiles(projectiles, players, dt);
-            BroadcastGameState(server, players, projectiles);
+            ServerUpdateMelee(melees, players, dt);
+            BroadcastGameState(server, players, projectiles, melees);
         }
 
         // Tiny sleep to avoid burning 100% CPU in the polling loop.
@@ -332,4 +451,3 @@ int main(void) {
     enet_host_destroy(server);
     return 0;
 }
-

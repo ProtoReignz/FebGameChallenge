@@ -10,6 +10,7 @@ static_assert(sizeof(MsgGameState) < 16000, "Packet too big");
 #include <cstdio>
 #include <cstring>
 #include <cstdbool>
+#include <cmath>
 
 
 //Wrappers that allow the Enet and Raylib windows to be cleaned up even outside of the scope they were init in
@@ -47,6 +48,7 @@ struct WindowGuard{
 struct ClientState{
     NetPlayer players[MAX_PLAYERS] {};
     NetProjectile projectiles[MAX_PROJECTILES] {};
+    NetMelee melees[MAX_MELEES] {};
 
     uint8_t myID {255}; //ID for the current client; 255 is unassigned
     bool connected {false};
@@ -80,7 +82,8 @@ static bool PollNetwork(ENetHost* host, ClientState& state){
                     
                     std::memcpy(state.players, msg->players, sizeof(state.players));
                     std::memcpy(state.projectiles, msg->projectiles, sizeof(state.projectiles));
-
+                    std::memcpy(state.melees, msg->melees, sizeof(state.melees));
+                    
                     state.gotFirstState = true;
                                   
 
@@ -104,19 +107,20 @@ static bool PollNetwork(ENetHost* host, ClientState& state){
 
 //collect the current frame's state to send to the server
     //Taking camera as const-ref means the signals won't be modified
-static void SendInput(ENetPeer* server, const ClientState& state, const Camera2D& camera){
+static void SendInput(ENetPeer* server, const ClientState& state, const Camera2D& camera, uint8_t charClass){
     const Vector2 mouse = GetMousePosition();
     const Vector2 mouseWorld = GetScreenToWorld2D(mouse, camera);
 
     MsgClientInput input{
         .type = static_cast<uint8_t>(MessageType::CLIENT_INPUT),
-        .left       = static_cast<uint8_t>(IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)),
-        .right      = static_cast<uint8_t>(IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)),
-        .up         = static_cast<uint8_t>(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)),
-        .down       = static_cast<uint8_t>(IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)),
+        .left = static_cast<uint8_t>(IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)),
+        .right = static_cast<uint8_t>(IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)),
+        .up = static_cast<uint8_t>(IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)),
+        .down = static_cast<uint8_t>(IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)),
         .mouse_mapX = mouseWorld.x,
         .mouse_mapY = mouseWorld.y,
-        .shooting   = static_cast<uint8_t>(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)),
+        .shooting = static_cast<uint8_t>(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)),
+        .charClass = charClass,
     }; //static cast as the narrowing is explicit for the compiler, thanks claude ;D
 
     ENetPacket* pkt = enet_packet_create(&input, sizeof(input), ENET_PACKET_FLAG_UNSEQUENCED);
@@ -175,6 +179,24 @@ static void Render(const ClientState& state, const Camera2D& camera){
         DrawCircleV({pr.x, pr.y}, pr.radius, YELLOW);
     }
 
+    for(int i = 0; i < MAX_MELEES; i++){
+        if (!state.melees[i].active) continue;
+        const NetMelee& m = state.melees[i];
+
+        const float start = (m.dirAng - m.halfArc) * (180.0f / PI);
+        const float end = (m.dirAng + m.halfArc) * (180.0f / PI);
+
+        DrawCircleSector({m.originX, m.originY}, m.range, start, end, 16, Fade(WHITE, 0.15f));
+
+        const Vector2 blade = {
+            m.originX + cosf(m.currAng) * m.range,
+            m.originY + sinf(m.currAng) * m.range,
+        };
+
+        DrawLineEx({m.originX, m.originY}, blade, 3.0f, WHITE);
+
+    }
+
     EndMode2D();
 
     if(!state.connected){
@@ -206,7 +228,7 @@ static void Disconnect(ENetHost* host, ENetPeer* server){
 
 int main(int argc, char **argv){
     const char* serverIP = (argc > 1) ? argv[1] : "127.0.0.1";
-
+    const uint8_t thisclass = (argc > 2) ? static_cast<uint8_t>(std::atoi(argv[2])) : 0;
     std::printf("sizeof(MsgGameState)    = %zu\n", sizeof(MsgGameState));
     std::printf("sizeof(MsgClientInput)  = %zu\n", sizeof(MsgClientInput));
     std::printf("sizeof(NetPlayer)       = %zu\n", sizeof(NetPlayer));
@@ -254,7 +276,7 @@ int main(int argc, char **argv){
         UpdateCamera(camera, state);
 
         if (state.connected){
-            SendInput(serverPeer, state, camera);
+            SendInput(serverPeer, state, camera, thisclass);
         }
 
         Render(state, camera);
